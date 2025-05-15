@@ -1,0 +1,377 @@
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* 🔗 1. Pantalla partida en dos columnas */
+  body {
+    display: flex;            /* columna izquierda + columna derecha */
+    flex-direction: row;
+    background-color: #f7f7f7;
+  }
+
+  /* 📺 2. Columna izquierda → avatar */
+  #avatar-container {
+    width: 50%;               /* mitad izquierda */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #000;         /* fondo oscuro para contraste (opcional) */
+  }
+  #avatar-stream {
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  /* 💬 3. Columna derecha → chat */
+  #main-container {
+    width: 50%;               /* mitad derecha */
+    max-width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Logo flotante */
+  #logo {
+    position: absolute;
+    top: 10px;
+    left: 20px;
+    width: 160px;
+    height: auto;
+    z-index: 1000;
+  }
+
+/* Estilos específicos para pantallas más grandes (escritorio) */
+@media (min-width: 768px) {
+    #main-container {
+        width: 60%; 
+        max-width: 60%; 
+        border-radius: 10px; 
+        overflow: hidden;
+    }
+}
+
+
+/*------CHAT------*/
+#chat-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 20px;
+    flex-direction: column;
+    display: flex;
+}
+
+#chat-container .message {
+    margin-bottom: 20px;
+    font-size: 13px;
+    font-family: 'Arial', sans-serif;
+    line-height: 2;
+    color:rgb(74, 74, 74);
+    clear: both;
+    display: flex; 
+    text-align: left;
+}
+
+#chat-container .message.user {
+    background-color: #cad7e3;
+    padding-left: 16px;
+    padding-right: 16px; 
+    padding-top: 6px;  
+    padding-bottom: 6px;
+    max-width: 60%;
+    border-radius: 20px;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+    font-weight: 400;
+    align-self: flex-end;
+    margin-left: auto;
+}
+
+#chat-container .message.welcome,
+#chat-container .message.bot {
+    background-color: transparent;
+    font-weight: 400;
+    clear: both;
+    display: block;
+}
+
+
+/*------INPUT------*/
+#input-container {
+    display: flex;
+    padding: 20px;
+    background-color: #f1f1f1;
+    border-top: 1px solid #ddd;
+}
+
+#input-container input[type="text"] {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+#send-button {
+    padding: 10px 20px;
+    margin-left: 10px;
+    background-color: #5b5675;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+
+/*------ANIMACIÓN DE CARGA------*/
+/* Estilo para el texto */
+#loading-div {
+    display: flex;
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center;
+    gap: 10px; 
+    font-weight: bold;
+    color: #333;
+    margin: 10px 0;
+}
+
+/* Estilo para el spinner */
+    #loading-spinner {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        position: relative;
+        animation: rotate 1s linear infinite
+      }
+      #loading-spinner::before , #loading-spinner::after {
+        content: "";
+        box-sizing: border-box;
+
+        position: absolute;
+        inset: 0px;
+        border-radius: 50%;
+        border: 5px solid #85ebff;
+        animation: prixClipFix 2s linear infinite ;
+      }
+      #loading-spinner::after{
+        border-color: #1c718e;
+        animation: prixClipFix 2s linear infinite , rotate 0.5s linear infinite reverse;
+        inset: 6px;
+      }
+
+      @keyframes rotate {
+        0%   {transform: rotate(0deg)}
+        100%   {transform: rotate(360deg)}
+      }
+
+      @keyframes prixClipFix {
+          0%   {clip-path:polygon(50% 50%,0 0,0 0,0 0,0 0,0 0)}
+          25%  {clip-path:polygon(50% 50%,0 0,100% 0,100% 0,100% 0,100% 0)}
+          50%  {clip-path:polygon(50% 50%,0 0,100% 0,100% 100%,100% 100%,100% 100%)}
+          75%  {clip-path:polygon(50% 50%,0 0,100% 0,100% 100%,0 100%,0 100%)}
+          100% {clip-path:polygon(50% 50%,0 0,100% 0,100% 100%,0 100%,0 0)}
+      }
+
+
+/*------CONTENEDOR DE RESPUESTA DEL BOT------*/
+/* Contenedor del logo del bot */
+.bot-logo-container {
+    margin-right: 10px; /* Espacio entre el logo y el mensaje */
+}
+
+/* Imagen del logo del bot */
+.bot-logo {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+}
+
+/* Contenedor del texto del bot */
+.bot-message-content {
+    display: flex;
+    flex-direction: column;
+}
+
+/*------MAPA DE LOCALIZACIONES------*/
+.map-container {
+    width: 100%;
+    height: 400px; /* Altura ajustada a 400px */
+    margin: 10px auto; /* Centrado horizontalmente con auto */
+    display: flex;
+    justify-content: center; /* Centra el contenido horizontalmente */
+    align-items: center; /* Centra el contenido verticalmente */
+    background-color: #f0f0f0; /* Opcional: color de fondo para mejor visibilidad */
+    border: 4px solid #ccc; /* Opcional: borde para distinguir el mapa */
+    border-radius: 8px;
+}
+
+/*------CARRUSEL DE IMÁGENES------*/
+/* Estilos para el contenedor principal del carrusel */
+.carousel-container {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    height: auto; /* Se ajustará dinámicamente desde JS */
+    border: 4px solid #ccc;
+    border-radius: 8px;
+}
+
+/* Estilos para la pista de imágenes */
+.image-track {
+    display: flex;
+    transition: transform 0.5s ease;
+    width: auto; /* Se ajustará dinámicamente desde JS */
+    height: 100%;
+}
+
+/* Estilos para las imágenes dentro del carrusel */
+.image-track img {
+    width: 100%; /* Se ajustará dinámicamente desde JS */
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Estilos para los botones de navegación */
+.carousel-button {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    padding: 10px;
+    cursor: pointer;
+    font-size: 18px;
+    border-radius: 50%;
+    user-select: none;
+}
+
+.carousel-button:hover {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+.carousel-button--prev {
+    left: 10px;
+}
+
+.carousel-button--next {
+    right: 10px;
+}
+
+/* FORMULARIO DE DATOS PERSONALES
+/* Estilo general del formulario */
+.book-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 50%;
+    max-width: 50%;
+    margin: 0 auto;
+    padding: 20px;
+    border: 4px solid #ccc;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Estilo de las etiquetas */
+.book-form label {
+    font-size: 0.8rem;
+    color: #333;
+}
+
+/* Estilo de los campos de entrada */
+.book-form input {
+    font-size: 0.6rem;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.3s ease;
+}
+
+/* Efecto hover y foco en los campos de entrada */
+.book-form input:focus {
+    border-color: #007BFF;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}
+
+/* Estilo del botón de envío */
+.book-form .submit-button {
+    font-size: 1rem;
+    font-weight: bold;
+    padding: 10px 15px;
+    margin: 5% 20%;
+    background-color: #007BFF;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Efectos hover y activo en el botón de envío */
+.book-form .submit-button:hover {
+    background-color: #0056b3;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.book-form .submit-button:active {
+    background-color: #003f7f;
+}
+
+/* Estilo para mensajes de validación nativos del navegador */
+.book-form input:invalid {
+    border-color: #dc3545;
+}
+
+.book-form input:invalid:focus {
+    box-shadow: 0 0 5px rgba(220, 53, 69, 0.5);
+}
+
+/* Responsive: Ajustar tamaño en pantallas más pequeñas */
+@media (max-width: 480px) {
+    .book-form {
+        padding: 15px;
+        font-size: 0.9rem;
+    }
+
+    .book-form .submit-button {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
+}
+
+
+/* ---------- MICROFONO -------- */
+#mic-button {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: white;
+    border: 2px solid #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-left: 8px;
+}
+
+#mic-button svg {
+    stroke: #888;
+    transition: stroke 0.3s ease;
+}
+
+#mic-button.recording {
+    background-color: red;
+    border-color: red;
+}
+
+#mic-button.recording svg {
+    stroke: white;
+}

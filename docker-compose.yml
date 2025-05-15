@@ -1,15 +1,64 @@
+version: '3.8'
+
 services:
-  rk-chatbot:
-    build: .
-    image: rk-chatbot-image
-    container_name: rk-chatbot
+  agent_app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: inm_agent_app_image
+    container_name: inm_agent_app
+    working_dir: /app/backend
     volumes:
       - .:/app
     ports:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
-      - SPATIALITE_LIBRARY_PATH=${SPATIALITE_LIBRARY_PATH}
     env_file:
-      - .env  # 🔹 Cargar variables de entorno desde .env
+      - ./backend/.env
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug --reload
+    depends_on:
+      - redis
+      - mongo
+
+  redis:
+    image: redis:7-alpine
+    container_name: docker_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  mongo:
+    image: mongo:6.0
+    container_name: docker_mongo
+    command: mongod --quiet
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+
+  frontend_dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    image: inm_agent_app_frontend_dev
+    container_name: inm_agent_app_frontend_dev
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+    command: npm run dev
+    depends_on:
+      - agent_app
+
+volumes:
+  redis-data:
+  mongo-data:

@@ -1,0 +1,11 @@
+FROM node:18
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+# Instala Vite globalmente si lo prefieres (opcional)
+# RUN npm install -g vite
+
+CMD ["npm", "run", "dev"]
