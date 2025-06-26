@@ -32,6 +32,7 @@ async def create_object_sessions(request: Request, phone: str = None) -> str:
         else:
             id = f"web_{str(uuid.uuid4())}"  # Utilizamos un formato UUID como id desde Web
             metadata = {"source": "web"}
+            print(f"ID: {id}")
 
         # ----CREACIÓN DE SESIÓN
         session = await session_service.get_session(id)
@@ -71,15 +72,18 @@ async def login(request: Request, response: Response):
 
         # ----REGISTRO DE COOKIE
         signer = Signer(os.getenv("MIDDLEWARE_SECRET_KEY"))
-        signed_id = signer.sign(id).decode() 
+        signed_id = signer.sign(id).decode()
+
+        secure = os.getenv("ENV") == "production"
 
         response.set_cookie(
-            secure=True,
+            secure=True,  
             key="id",
             value=signed_id,
             httponly=True,
-            samesite="Lax",
-            max_age=86400
+            samesite="none",
+            max_age=86400,
+            path="/"
         )
 
         logging.info(f"Cookie stablised sucessfully")

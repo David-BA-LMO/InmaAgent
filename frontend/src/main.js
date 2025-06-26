@@ -1,7 +1,7 @@
 import { startSession, fetchWelcomeMessage } from './api.js';
 import { setupUIEvents } from './events.js';
 import { createBotMessageContainer } from './messages.js';
-import { startAvatar } from './avatar.js';
+import { initAvatarSession} from './avatar.js';
 
 // Punto de entrada al cargar el DOM
 
@@ -18,5 +18,5 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   setupUIEvents();
 
-  startAvatar()
+  await initAvatarSession()
 });

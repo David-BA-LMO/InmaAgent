@@ -5,7 +5,7 @@ let markdownBuffer = '';  // Buffer que almacena el markdown csompleto.
 let tempSpan = null;  // Variable para el span temporal.
 
 
-export async function renderize_html(chunk) {
+export async function renderize_html(chunk, targetDiv) {
     // Eliminar elementos markdown del chunk (simplificación)
     const plainText = chunk.replace(/[#*_\[\]\(\)`]/g, '');
 
@@ -25,7 +25,7 @@ export async function renderize_html(chunk) {
     // Verificamos si hemos llegado al final de una estructura markdown.
     if (isCompleteMarkdown(markdownBuffer)) {
         // Si el markdown está completo, renderizamos el HTML final.
-        renderFinalHTML();
+        renderFinalHTML(targetDiv);
     }
 }
 
@@ -38,7 +38,7 @@ function isCompleteMarkdown(buffer) {
 }
 
 // Función para eliminar el span temporal y sustituirlo por el contenido renderizado.
-function renderFinalHTML() {
+function renderFinalHTML(targetDiv) {
     if (tempSpan) {
         // Eliminamos el span temporal.
         targetDiv.removeChild(tempSpan);

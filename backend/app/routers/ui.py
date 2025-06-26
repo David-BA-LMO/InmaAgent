@@ -19,21 +19,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 #------RUTAS-----
-"""
-@router.get("/", response_class=HTMLResponse, include_in_schema=False)
-async def serve_interface():
-    ""Sirve la interfaz principal del chatbot""
-    try:
-        html_path = Path("static/html/index.html")
-        return html_path.read_text(encoding="utf-8")
-    except FileNotFoundError as e:
-        logging.error(f"Error occurred in interface serving: {e}")
-        return HTMLResponse(
-            content="<h1>Error: Interfaz no encontrada</h1>",
-            status_code=404
-        )
-"""
-
 @router.post("/submit-form")
 async def submit_form(
     request: Request,

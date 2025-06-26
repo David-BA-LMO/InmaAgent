@@ -6,6 +6,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 export async function startSession() {
     try {
         const response = await fetch(`${BASE_URL}/login`, {
+            credentials: 'include',
             method: 'POST'
         });
         const data = await response.json();

@@ -1,4 +1,5 @@
 import logging
+import os
 from itsdangerous import Signer, BadSignature
 from fastapi import Request, Response, HTTPException
 from starlette.responses import JSONResponse
@@ -12,10 +13,13 @@ class SessionMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, secret_key):
         super().__init__(app)
         self.cookie_name = "id"
-        self.excluded_paths = ["/login", "/", "/welcome-message", "/d-id/create-agent"]
+        self.excluded_paths = ["/login", "/", "/welcome-message"]
         self.signer = Signer(secret_key)
 
     async def dispatch(self, request: Request, call_next) -> Response:
+
+        if request.method == "OPTIONS":
+            return await call_next(request)
         
         #----MANEJO DE RUTA A WHATSAPP
         if request.url.path == "/whats-message":
@@ -26,6 +30,7 @@ class SessionMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         #----RECUPERACIÓN DEL ID EN LA COOKIE
+        print(f"COOKIES: {request.cookies}")
         signed_id = request.cookies.get(self.cookie_name)
         
         if not signed_id:
@@ -39,6 +44,7 @@ class SessionMiddleware(BaseHTTPMiddleware):
         try:
             id = self.signer.unsign(signed_id).decode()
             request.state.session = id
+            print(f"MIDDLEWARE ID: {id}")
             
         except BadSignature:
             logger.error("Invalid session firm")
@@ -49,15 +55,6 @@ class SessionMiddleware(BaseHTTPMiddleware):
 
         # ----REENVÍO DE COOKIE
         response = await call_next(request)
-        response.set_cookie(
-            secure=True,
-            key="id",
-            value=self.signer.sign(id).decode(),
-            httponly=True,
-            samesite="Lax",
-            max_age=86400
-        )
-
         return response
     
     async def handle_whatsapp_request(self, request: Request, call_next):

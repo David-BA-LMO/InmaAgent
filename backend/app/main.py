@@ -115,24 +115,18 @@ def start_app() -> FastAPI:
         lifespan=lifespan
     )
 
-    #------ SCHEDULER PARA CARGA DE DATOS
-    try:
-        scheduler = BackgroundScheduler()
-        scheduler.add_job(load_app_data, 'cron', hour=4, minute=0)
-        scheduler.start()
-
-    except Exception as e:
-        logger.critical(f"Error configuring Cscheduler for update app data: {e}")
-        raise RuntimeError(f"Error configuring Cscheduler for update app data: {e}")
-
     #------MIDDLEWARE CORS
     try:
         cors_origins = os.getenv("CORS_ORIGINS", "[*]")
         CORS_ORIGINS = json.loads(cors_origins)
+        print(f"CORS ORIGINS: {CORS_ORIGINS}")
+
+        if not isinstance(CORS_ORIGINS, list):
+            raise ValueError("CORS_ORIGINS must be a list in .env")
 
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=CORS_ORIGINS,
+            allow_origins=["http://localhost:5173"],
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
@@ -144,6 +138,7 @@ def start_app() -> FastAPI:
     except Exception as e:
         logger.critical(f"Error configuring CORS middleware: {e}")
         raise RuntimeError("Failed to configure CORS middleware") from e
+    
 
     #------MIDDLEWARE DE SESIONES
     try:
@@ -152,6 +147,18 @@ def start_app() -> FastAPI:
     except Exception as e:
         logger.critical(f"Error initializing Sessions Middleware: {e}")
         raise
+    
+
+    #------ SCHEDULER PARA CARGA DE DATOS
+    try:
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(load_app_data, 'cron', hour=4, minute=0)
+        scheduler.start()
+
+    except Exception as e:
+        logger.critical(f"Error configuring Cscheduler for update app data: {e}")
+        raise RuntimeError(f"Error configuring Cscheduler for update app data: {e}")
+
     
     #------ARCHIVOS ESTÁTCOS
     try:

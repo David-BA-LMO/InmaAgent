@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.routers import chat, session, ui, health, whatsapp, avatar
+from app.routers import chat, session, ui, health, whatsapp
 
 def main_router() -> APIRouter:
     router = APIRouter()
@@ -9,5 +9,4 @@ def main_router() -> APIRouter:
     router.include_router(chat.router, tags=["Chat"])
     router.include_router(whatsapp.router, tags=["Whatsapp-Chat"])
     router.include_router(health.router, tags=["Health"])
-    router.include_router(avatar.router, tags=["Avatar"])
     return router
