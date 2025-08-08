@@ -9,7 +9,6 @@ from typing import List, Dict, Any
 
 from app.logic.router_chain import Router_chain
 from app.logic.qa_chain import QAChain
-from app.config import welcome_message
 from app.dependencies.combined_dependencies import combined_dependencies
 from app.dependencies.session_dependece import update_session
 from app.dependencies.messages_dependence import update_messages
@@ -21,11 +20,6 @@ from app.utils.api_calls import transcribe_audio
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# ------ RUTA PARA MENSAJE DE BIENVENIDA ------
-@router.get("/welcome-message") # Ruta para obtener el mensaje de bienvenida
-async def get_welcome_message():
-    return {"message": welcome_message}
 
 # ------ RUTA PARA ENVIAR AL AGENTE IA ------
 @router.post("/chat")

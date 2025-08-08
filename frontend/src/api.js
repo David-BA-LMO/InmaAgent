@@ -19,15 +19,3 @@ export async function startSession() {
         chatContainer.appendChild(errorMessageDiv);
     }
 }
-
-// MENSAJE DE BIENVENIDA
-export async function fetchWelcomeMessage() {
-    try {
-      const res = await fetch(`${BASE_URL}/welcome-message`);
-      if (!res.ok) throw new Error("Network error");
-      return await res.json();
-    } catch (error) {
-      console.error("Error:", error);
-      return { message: "Error: No se pudo cargar el mensaje de bienvenida." };
-    }
-  }

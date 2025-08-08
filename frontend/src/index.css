@@ -366,19 +366,27 @@ html, body {
 
 
 
-/* ------ AVATAR ----- */
+/* ------ AVATAR CONTENEDOR ----- */
 #avatar-container {
   width: 50vw;
   max-width: 600px;
+  height: 100vh;            /* Mantiene el video alto completo */
+  margin: 0 auto;
   box-sizing: border-box;
+
   display: flex;
   justify-content: center;
-  align-items: flex-end;  /* 👈 Coloca el video en la parte inferior */
-  margin: 0 auto;
-  height: 100vh;          /* Ocupa toda la altura visible si quieres que el video esté pegado al fondo */
+  align-items: flex-end;    /* Coloca el video pegado al fondo del div */
+  overflow: hidden;         /* Oculta el overflow si el video se recorta */
+  position: relative;
 }
 
-#avatarVideo {
-  width: 100%;
-  height: auto;
+/* ------ VIDEO DEL AVATAR ----- */
+#avatarVideo,
+#videoPlayer {
+  height: 100%;
+  width: auto;
+  object-fit: cover;        /* Corta los lados si es más ancho */
+  object-position: center;  /* Centrado horizontal */
+  display: block;
 }

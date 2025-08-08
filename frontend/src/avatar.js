@@ -1,375 +1,303 @@
 // src/avatar.js
-//import {getAudioFromElevenLabs, audioBufferToBase64} from "./audio.js";
+
+import * as SpeechSDK from 'microsoft-cognitiveservices-speech-sdk/distrib/lib/microsoft.cognitiveservices.speech.sdk';
+
+let avatarSynthesizer = null;
+let peerConnection = null;
+let isAvatarStarted = false;
+let inactivityTimeout = null;
+let initPromise = null; // Promesa global para espera a la inicialización
+let speakingQueue = Promise.resolve(); 
+const div_avatar = "avatar-container"
+const background_image_url = "https://i.imgur.com/HiilKPr.png"
+
 
 /* ---------------------- CONSTANTES ---------------------- */
-const API_KEY        = import.meta.env.VITE_DID_API_KEY;
-const PRESENTER_ID   = import.meta.env.VITE_DID_PRESENTER_ID;
-const VOICE_PROVIDER = import.meta.env.VITE_DID_VOICE_PROVIDER
-const VOICE_ID       = import.meta.env.VITE_DID_VOICE_ID
-
-/* ------ ESTADO GLOBAL ------ */
-let pc               = null;       // RTCPeerConnection activo
-let streamId         = null;       // ID de D‑ID para el stream
-let sessionId        = null;       // session_id devuelto por D‑ID
-const id_video = "avatarVideo";
-let videoEl = null
-
-/* ------ ESTADOS ------ */
-let isSpeaking = false;
-let idleTimer = null;
-const IDLE_TIMEOUT_MS = 2000; // 2 seg después de hablar
+const KEY = import.meta.env.VITE_AZURESPEECH_KEY;
+const REGION = import.meta.env.VITE_AZURESPEECH_REGION;
+const LANGUAGE = import.meta.env.VITE_AZURESPEECH_LANGUAGE;
+const VOICE = import.meta.env.VITE_AZURESPEECH_VOICE;
+const CHARACTER = import.meta.env.VITE_AZURESPEECH_CHARACTER;
+const STYLE = import.meta.env.VITE_AZURESPEECH_STYLE;
+const INACTIVITY_LIMIT_MS = 2 * 60 * 1000; // El primer valor indica los minutos
 
 
-/* ------ CABECERA AUTH REUTILIZABLE ------ */
-const authHdr = {
-  accept: "application/json",
-  "content-type": "application/json",
-  authorization: "Basic " + btoa(API_KEY + ":")    // <base64(API_KEY+:)>
-};
+/* ---------------------- CONFIGURACIÓN DE VOZ ---------------------- */
+const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(KEY, REGION);
+speechConfig.speechSynthesisLanguage = LANGUAGE;
+speechConfig.speechSynthesisVoiceName = VOICE;  
 
 
-/* ------ INICIALIZACIÓN DEL AVATAR ------
-  Esta función solo se ejecuta una vez por sesión */
-export async function initAvatarSession () {
-  videoEl = document.getElementById(id_video);
-  if (!videoEl) {
-    console.error("No se encontró el elemento avatarVideo en el DOM.");
-    throw new Error("Elemento de video no encontrado.");
+/* ---------------------- CONFIGURACIÓN DE AVATAR ---------------------- */
+let avatarConfig = null;
+
+function createAvatarConfig(containerId) {
+  const container = document.getElementById(containerId);
+  
+
+  if (!container) {
+    console.warn(` Contenedor '${containerId}' no encontrado.`);
+    return new SpeechSDK.AvatarConfig(CHARACTER, STYLE); // fallback sin crop
   }
 
-  await createClipStream();      // PASO 1, 2 y 3
-  await waitForConnection();     // PASO 4
+  const containerHeight = container.offsetHeight;
+  const containerWidth = container.offsetWidth;
+
+  // El video del avatar es siempre 1920x1080 (16:9)
+  const videoHeight = 1080;
+  const videoWidth = 1920;
+
+  // Calculamos el ancho ideal para mantener altura = 1080
+  const targetAspectRatio = containerWidth / containerHeight;
+  const idealAspectRatio = videoWidth / videoHeight;
+
+  let cropLeft = 0;
+  let cropRight = videoWidth;
+
+  if (targetAspectRatio < idealAspectRatio) {
+    // Más alto que ancho → necesitamos recortar horizontalmente
+    const newWidth = targetAspectRatio * videoHeight;
+    const cropMargin = (videoWidth - newWidth) / 2;
+    cropLeft = Math.round(cropMargin);
+    cropRight = Math.round(videoWidth - cropMargin);
+  }
+
+  const videoFormat = new SpeechSDK.AvatarVideoFormat();
+  videoFormat.setCropRange(
+    new SpeechSDK.Coordinate(cropLeft, 0),
+    new SpeechSDK.Coordinate(cropRight, videoHeight)
+  );
+
+  avatarConfig = new SpeechSDK.AvatarConfig(CHARACTER, STYLE, videoFormat);
+  avatarConfig.backgroundImage = background_image_url;
+
+  return avatarConfig;
 }
 
 
-
-/* ------ PASO 1: LLAMADA POST PARA CREAR EL STREAM ------
-  Debe devolver los siguientes valores:
-    - id (streamId): identificador único del stream 
-    - session_id (sessionId): sesión WebRTC
-    - offer, ice_servers: datos necesarios para negociar WebRTC
-
-*/
-async function createClipStream () {
-  try {
-    const res = await fetch("https://api.d-id.com/clips/streams", {  // llamada a /clips/streams 
-      method : "POST",
-      headers: authHdr,
-      body   : JSON.stringify({
-        presenter_id : PRESENTER_ID,   // Imagen del avatar seleccionado
-        stream_warmup: true,
-        fluent: true
-      })
-    });
-
-    if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`createClipStream → HTTP ${res.status}: ${err}`);
+/* ---------------------- OBTENER SERVIDOR ICE ---------------------- */
+async function getIceServer() {
+  const response = await fetch(`https://${REGION}.tts.speech.microsoft.com/cognitiveservices/avatar/relay/token/v1`, {
+    method: 'GET',
+    headers: {
+      'Ocp-Apim-Subscription-Key': KEY
     }
-
-    const { id, session_id, offer, ice_servers } = await res.json();
-    streamId  = id;
-    sessionId = session_id;
-
-    // Ejecución del PASO 2
-    await respondToOffer(offer, ice_servers);
-
-  } catch (err) {
-    console.error("Error en la creación del stream:", err);
-    throw err;
-  }
-}
-
-
-
-/* ------ PASO 2: NEGOCIACIÓN P2P Y RESPUESTA A LA OFERTA SDP ------ */
-async function respondToOffer (remoteOffer, iceServers) {
-
-try {
-
-    // Creación de una conexión WebRTC con los servidores STUN/TURN (ice servers). Cerramos la conexión previa si ya existía una.
-    if (pc) {
-      console.warn("PeerConnection ya existía. Cerrando...");
-      pc.close();
-    }
-    pc = new RTCPeerConnection({ iceServers });
-
-    // Evento para manejar la llegada de audio/video (track remoto). Se vincula ese stream al <video> HTML
-    pc.ontrack = ({ streams }) => {
-      console.log("Recibido track remoto:", streams); // Es de esperar recibir un track para audio y otro para video.
-      if (videoEl && videoEl.srcObject !== streams[0]) {
-        videoEl.srcObject = streams[0];
-        console.log("Stream asignado al elemento de video.");
-        console.log("Track(s) activos:", streams[0]?.getTracks());
-      }
-    };
-
-    // Envio de candidatos ICE a D-ID cuando el navegador los descubra
-    pc.onicecandidate = ({ candidate }) => {
-      if (candidate) {
-        console.log("Enviando ICE candidate...");  // Suelen enviarse varios candidatos dependiendo de la conexión
-        sendIceCandidate(candidate);  // Ejecución del PASO 3
-      }
-    };
-
-    // Eventos varios opcionales para depuración y estado
-    pc.addEventListener("iceconnectionstatechange", () => {
-      console.log("Estado ICE:", pc.iceConnectionState);
-    });
-
-    pc.addEventListener("connectionstatechange", () => {
-      console.log("Estado conexión:", pc.connectionState);
-    });
-
-    pc.addEventListener("signalingstatechange", () => {
-      console.log("Estado señalización:", pc.signalingState);
-    });
-
-    // Oferta SDP al navegador
-    await pc.setRemoteDescription(remoteOffer);
-    console.log("SDP remote offer establecida.");
-
-    // Establecemos la respuesta del navegador a la oferta SDP.  
-    // "have-remote-offer" indica que se ha recibido la oferta del servidor y aún no has enviado respuesta.
-    if (pc.signalingState === "have-remote-offer") {
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      console.log("SDP answer creada y establecida localmente.");
-
-      // Envio de la respuesta a D-ID para completar el handshake
-      const res = await fetch(`https://api.d-id.com/clips/streams/${streamId}/sdp`, {
-        method: "POST",
-        headers: authHdr,
-        body: JSON.stringify({
-          answer: answer,
-          session_id: sessionId
-        })
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Fallo al enviar SDP answer: ${res.status} - ${errorText}`);
-      }
-
-      console.log("SDP answer enviada correctamente a D-ID.");
-    } else {
-      throw new Error("Estado de señalización inesperado al recibir oferta: " + pc.signalingState);
-    }
-  } catch (err) {
-    console.error("Error en respondToOffer:", err);
-    throw err;
-  }
-}
-
-
-
-/* ------ PASO 3: ENVIO DE CANDIDATOS ICE PARA LA CONEXIÓN ------ */
-function sendIceCandidate({ candidate, sdpMid, sdpMLineIndex }) {
-  if (!candidate) {
-    console.warn("ICE candidate vacío o inválido, no se envía.");
-    return;
-  }
-
-  fetch(`https://api.d-id.com/clips/streams/${streamId}/ice`, {
-    method: "POST",
-    headers: authHdr,
-    body: JSON.stringify({
-      candidate,
-      sdpMid,
-      sdpMLineIndex,
-      session_id: sessionId
-    })
-  })
-  .then(res => {
-    if (!res.ok) {
-      console.error("Fallo al enviar ICE candidate:", res.status);
-    } else {
-      console.log("ICE candidate enviado correctamente.");
-    }
-  })
-  .catch(err => {
-    console.error("Error al enviar ICE candidate:", err);
   });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Error en respuesta del servidor: ${response.status} - ${text}`);
+  }
+
+  const relayToken = await response.json();
+
+  return [{
+    urls: relayToken.Urls,
+    username: relayToken.Username,
+    credential: relayToken.Password
+  }];
 }
 
 
+/* ---------------------- ESTABLECER PEERCONNECTION ---------------------- */
+async function createPeerConnection(iceServers) {
 
-/* ----- PASO 4: VALIDACIÓN FINAL DE LA CONEXIÓN -------- */
-// Esperamos a que la conexión WebRTC alcance el estado connected
-function waitForConnection() {
-  return new Promise((resolve, reject) => {
-    if (!pc) {
-      return reject(new Error("PeerConnection no inicializado"));
-    }
-
-    // Si ya está conectado, resolvemos inmediatamente
-    if (["connected", "completed"].includes(pc.connectionState)) {
-      console.log("Conexión WebRTC ya establecida.");
-      return resolve();
-    }
-
-    // Esperamos cambios en el estado de conexión
-    pc.addEventListener("connectionstatechange", () => {
-      const state = pc.connectionState;
-      console.log("Cambio de estado de conexión:", state);
-
-      if (["connected", "completed"].includes(state)) {
-        resolve(); // Éxito
-      } else if (state === "failed") {
-        reject(new Error("Fallo en la conexión ICE/WebRTC"));
-      }
-    });
+  peerConnection = new RTCPeerConnection({
+    iceServers
   });
+
+  // Recibir video/audio y montarlos en el contenedor especificado
+  peerConnection.ontrack = function (event) {
+    const container = document.getElementById(div_avatar);
+    if (!container) {
+      console.warn(`Contenedor con id '${div_avatar}' no encontrado.`);
+      return;
+    }
+
+    if (event.track.kind === 'video') {
+      let videoElement = document.getElementById('videoPlayer');
+
+      if (!videoElement) {
+        videoElement = document.createElement('video');
+        videoElement.id = 'videoPlayer';
+        videoElement.autoplay = true;
+        videoElement.playsInline = true;
+        container.appendChild(videoElement);
+      }
+
+      videoElement.srcObject = event.streams[0];
+    }
+
+    if (event.track.kind === 'audio') {
+      let audioElement = document.getElementById('audioPlayer');
+
+      if (!audioElement) {
+        audioElement = document.createElement('audio');
+        audioElement.id = 'audioPlayer';
+        audioElement.autoplay = true;
+        container.appendChild(audioElement);
+      }
+
+      audioElement.srcObject = event.streams[0];
+    }
+  };
+
+    // Pedimos recibir video y audio (modo 'sendrecv' para negociación WebRTC completa)
+    peerConnection.addTransceiver('video', { direction: 'sendrecv' });
+    peerConnection.addTransceiver('audio', { direction: 'sendrecv' });
+
+    return peerConnection;
+}
+
+/* ---------------------- REINICIAR AVATAR TRAS INACTIVIDAD ---------------------- */
+function resetInactivityTimer() {
+  clearTimeout(inactivityTimeout);
+  inactivityTimeout = setTimeout(() => {
+    console.log('Inactividad detectada. Cerrando avatar...');
+    closeAvatarConnection();
+  }, INACTIVITY_LIMIT_MS);
+}
+
+/* ---------------------- LIMPIAR CONTENEDOR ---------------------- */
+function cleanAvatarContainer() {
+  const container = document.getElementById(div_avatar);
+  if (container) container.innerHTML = '';
 }
 
 
-
-// ------ ENVIO DE TEXTO AL AVATAR ------ 
+/* ---------------------- HACER HABLAR AL AVATAR ---------------------- */
 export async function speakAvatar(text) {
 
-  // Solo prueba
-  //createIdleClip()
-  //getIdleClipById("clp_Vi8CNfA4OR13i0oa3GY1G")
-
-  await waitForConnection()
-
-  // Validación del texto
-  if (!text || typeof text !== "string" || text.trim().length === 0) {
-    throw new Error("speakAvatar → El texto no puede estar vacío.");
-  }
-
-  // Construcción del cuerpo
-  const body = {
-    script: {
-      type: "text",
-      provider: {
-        type: VOICE_PROVIDER,
-        voice_id: VOICE_ID,
-      },
-      input: text,
-      ssml: false
-    },
-    session_id: sessionId,
-    config: {
-      result_format: "mp4"
-    },
-    presenter_config: {
-      gesture: "auto",
-      stitch: true,
-      fluent: true
-    },
-    background: { color: false }
-  };
-
+  // 1. Llamada a speakAvatar()
   try {
+    resetInactivityTimer(); // 2. Reseteo del temporizador de inactividad
+    await ensureAvatarReady(); // 3. Garantiza que la conexión esté lista. Si no es el caso, crea una nueva
 
-    // Llamada a al API
-    const res = await fetch(`https://api.d-id.com/clips/streams/${streamId}`, {
-      method: "POST",
-      headers: authHdr,
-      body: JSON.stringify(body)
+    // Serializar locuciones en una cola para evitar solapamientos
+    speakingQueue = speakingQueue.then(() => new Promise((resolve, reject) => {
+      avatarSynthesizer.speakTextAsync(
+        text,
+        (result) => {
+          if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+            console.log('Avatar habló:', text);
+            resolve(result);
+          } else {
+            console.warn('Fallo en la síntesis. ID:', result.resultId);
+            reject(result);
+          }
+        },
+        (err) => {
+          console.error('Error al sintetizar:', err);
+          reject(err);
+        }
+      );
+    })).catch(async (err) => {      
+      await reconnectAvatar(); // Estrategia de reconexión si falla una locución
+      throw err;
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("speakAvatar → Error HTTP:", res.status, errText);
-      throw new Error(`speakAvatar → Fallo HTTP ${res.status}: ${errText}`);
-    }
-    const result = await res.json().catch(() => null);
-
-    // Validar respuesta
-    if (!result) {
-      console.warn("speakAvatar → La respuesta no contiene datos útiles (esperado en streaming).");
-    } else {
-      console.log("speakAvatar → Respuesta D-ID:", result);
-    }
-
-  } catch (err) {
-    console.error("speakAvatar → Fallo general:", err);
-    throw err;
+    return speakingQueue;
+  } catch (e) {
+    console.error('Error en speakAvatar:', e);
+    await reconnectAvatar();
+    throw e;
   }
 }
 
 
+/* ---------------------- ESPERA ACTIVA A LA CONEXIÓN ---------------------- */
+function waitForPeerConnectionConnected(pc, timeoutMs = 15000) {
+  if (!pc) return Promise.reject(new Error('No hay RTCPeerConnection'));
+  if (pc.connectionState === 'connected') return Promise.resolve();
 
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pc.removeEventListener('connectionstatechange', onChange);
+      reject(new Error('Timeout esperando conexión WebRTC'));
+    }, timeoutMs);
 
+    const onChange = () => {
+      if (pc.connectionState === 'connected') {
+        clearTimeout(timer);
+        pc.removeEventListener('connectionstatechange', onChange);
+        resolve();
+      } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        clearTimeout(timer);
+        pc.removeEventListener('connectionstatechange', onChange);
+        reject(new Error(`Conexión WebRTC en estado ${pc.connectionState}`));
+      }
+    };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-export async function createIdleClip() {
-
-  console.log("Generando idle video....")
-
-  const body = {
-    script: {
-      type: "text",
-      ssml: true,
-      input: '<break time="5000ms"/><break time="5000ms"/><break time="5000ms"/>',
-      provider: {
-        type: VOICE_PROVIDER,
-        voice_id: VOICE_ID,
-      },
-    },
-    presenter_id: "lily-ldwi8a_LdG",
-    config: {
-      fluent: true,
-      pad_audio: 0,
-      result_format: "webm",
-      background: {color: 'false'}
-    },
-    driver_id: 'Zz10FZua2P'
-  };
-
-  const res = await fetch("https://api.d-id.com/clips", {
-    method: "POST",
-    headers: authHdr,
-    body: JSON.stringify(body)
+    pc.addEventListener('connectionstatechange', onChange);
   });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error("createIdleClip → Error HTTP:", res.status, errText);
-    throw new Error(`createIdleClip → Fallo HTTP ${res.status}: ${errText}`);
-  }
-
-  const result = await res.json();
-  console.log("ID del clip creado:", result.id);
 }
 
 
-export async function getIdleClipById(clipId) {
+/* ---------------------- INICIALIZA EL AVATAR ---------------------- */
+async function ensureAvatarReady() {
+  if (isAvatarStarted && peerConnection?.connectionState === 'connected') return;
   
-  console.log("Recuperando idle video....")
+  // Si la promesa no existe, creamos una
+  if (!initPromise) {
+    initPromise = (async () => {
+      avatarConfig = createAvatarConfig(div_avatar); // 3a. Configuración del avatar
 
-  const res = await fetch(`https://api.d-id.com/clips/${clipId}`, {
-    method: "GET",
-    headers: authHdr
-  });
+      const iceServers = await getIceServer(); // 3b. Obtener servidores ICE
+      peerConnection = await createPeerConnection(iceServers); // 3c. Establece RTCPeerConnection
 
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error("getIdleClipById → Error HTTP:", res.status, errText);
-    throw new Error(`getIdleClipById → Fallo HTTP ${res.status}: ${errText}`);
+      avatarSynthesizer = new SpeechSDK.AvatarSynthesizer(speechConfig, avatarConfig); 
+      await avatarSynthesizer.startAvatarAsync(peerConnection); // 3d. Inicia avatar con avatarSynthesizer
+      await waitForPeerConnectionConnected(peerConnection); // 3e. Espera a que la conexión WebRTC esté activa (connected)
+      isAvatarStarted = true;
+      console.log('Avatar listo');
+    })().catch(async (e) => {
+      // Limpia estado si falló
+      initPromise = null;
+      isAvatarStarted = false;
+      await closeAvatarConnection();
+      throw e;
+    });
   }
 
-  const result = await res.json();
-  console.log("🎥 Clip recuperado:", result.result_url);
-  return result;
+  await initPromise; // Si la promesa existe, simplemente esperamos a que termine
 }
+
+
+/* ---------------------- RECONECTAR EL AVATAR ---------------------- */
+export async function reconnectAvatar() {
+  console.warn('Intentando reconectar avatar...');
+  await closeAvatarConnection();
+  await initAvatar();
+}
+
+
+/* ---------------------- CERRAR EL AVATAR ---------------------- */
+export async function closeAvatarConnection() {
+  try {
+    if (avatarSynthesizer) {
+      avatarSynthesizer.close();
+      avatarSynthesizer = null;
+    }
+
+    if (avatarSynthesizer?.stopAvatarAsync) {
+      try { await avatarSynthesizer.stopAvatarAsync(); } catch (e) {}
+    }
+
+    if (peerConnection) {
+      peerConnection.close();
+      peerConnection = null;
+    }
+
+    cleanAvatarContainer();
+    isAvatarStarted = false;
+    clearTimeout(inactivityTimeout);
+    initPromise = null; // <- Añadir esta línea
+    speakingQueue = Promise.resolve(); // <- Reset cola también (opcional)
+
+    console.log('Conexión cerrada correctamente.');
+  } catch (err) {
+    console.error('Error al cerrar conexión:', err);
+  }
+}
+
+

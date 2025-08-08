@@ -1,0 +1,63 @@
+# EN DESARROLLO...
+
+
+services:
+  # -------- BACKEND (FastAPI) --------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: inma_backend_prod
+    container_name: inma_backend_prod_app
+    restart: always
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - ./backend/.env.production
+    expose:
+      - "8000"
+    depends_on:
+      - mongo
+      - redis
+
+  # -------- FRONTEND (Vite + nginx) --------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: inma_frontend_prod
+    container_name: inma_frontend_prod_app
+    restart: alway
+    env_file:
+      - ./frontend/.env.production
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  # -------- REDIS --------
+  redis:
+    image: redis:7-alpine
+    container_name: docker_redis_prod
+    restart: always
+    expose:
+      - "6379"
+    volumes:
+      - redis-data:/data
+
+  # -------- MONGO --------
+  mongo:
+    image: mongo:6.0
+    container_name: docker_mongo_prod
+    restart: always
+    expose:
+      - "27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+
+volumes:
+  redis-data:
+  mongo-data:

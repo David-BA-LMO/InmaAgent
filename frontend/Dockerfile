@@ -1,3 +1,5 @@
+# EN DESARROLLO
+
 # Etapa 1: build con producción
 FROM node:18 AS builder
 

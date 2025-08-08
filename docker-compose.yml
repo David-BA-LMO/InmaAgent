@@ -1,63 +1,65 @@
-version: '3.8'
+
+# Los volumenes /app, redis y mongo no se sobreescriben en reconstrucciones posteriores con 'build'.
+# Para realizar una limpieza total antes de recargar los servicios ejecutar los siguientes comandos antes de 'build'
+# - 'docker-compose down --volumes --remove-orphans'
+# - 'docker image prune -a -f'
 
 services:
-  agent_app:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    image: inm_agent_app_image
-    container_name: inm_agent_app
-    working_dir: /app/backend
-    volumes:
-      - .:/app
-    ports:
-      - "8000:8000"
-    environment:
-      - PYTHONUNBUFFERED=1
+
+  # -------- SERVICIO REDIS --------
+  redis:
+      image: redis:7-alpine # Versión oficial de Redis
+      volumes:
+        - redis-data:/data # Volumen para persistencia
+
+
+  # -------- SERVICIO MONGO --------
+  mongo: 
+    image: mongo:6.0 # Verisón oficial de Mongo
+    command: mongod --quiet # Silencia logs innecesarios
+    volumes: 
+      - mongo-data:/data/db # Volumen para persistencia
     env_file:
-      - ./backend/.env
+      - .env
+
+
+  # -------- SERVICIO BACKEND (DEV) --------
+  backend_dev:
+    build:
+      context: ./backend # Directorio raíz
+      dockerfile: Dockerfile.dev # Localización del Dockerfile
+    image: inma_backend_dev # Imagen inmutable
+    working_dir: /app # Montar el proyecto en el contenedor para hot-reload
+    volumes:
+      - ./backend:/app # Volumen que persiste entre reinicios
+    ports:
+    - "8000:8000"  # No recomendado en producción, dado que las conexiones deben realizarse entre contenedores dentro de Docker, sin exponer puertos al host.
+    env_file:
+      - ./backend/.env # Archivo .env
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug --reload
-    depends_on:
+    depends_on: # Se ejecuta tras arrancar los servicios de memoria
       - redis
       - mongo
 
-  redis:
-    image: redis:7-alpine
-    container_name: docker_redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
 
-  mongo:
-    image: mongo:6.0
-    container_name: docker_mongo
-    command: mongod --quiet
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
-
+  # -------- SERVICIO FRONTEND (DEV) --------
   frontend_dev:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-    image: inm_agent_app_frontend_dev
-    container_name: inm_agent_app_frontend_dev
-    working_dir: /app
+      context: ./frontend # Directorio raíz
+      dockerfile: Dockerfile.dev # Localización del Dockerfile
+    image: inma_frontend_dev # Imagen inmutable
+    working_dir: /app # Montar el proyecto en el contenedor para hot-reload
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - ./frontend:/app # Volumen que persiste entre reinicios
+      - /app/node_modules # Sobrepone el frontend/node_modules anterior. Volumen anónimo. No depende del host local. Se borra con 'docker-compose down -v'
     ports:
-      - "5173:5173"
-    environment:
-      - NODE_ENV=development
-    command: npm run dev
-    depends_on:
-      - agent_app
+    - "5173:5173" # Puerto de uso para comunicaciones externas.
+    env_file:
+      - ./frontend/.env # Archivo .env
+    command: sh -c "npm install && npm run dev" # 'npm install' instala las dependencias indicadas en package.json dentro de node_modules. 'npm run dev' ejecuta el comando definido en scripts: dev, 'vite' en este caso.
+    depends_on: # Se ejecuta tras arrancar el servicio de backend
+      - backend_dev
+
 
 volumes:
   redis-data:

@@ -1,19 +1,18 @@
 FROM node:18
 
-# Establecer el directorio de trabajo
+# Establecer el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
 # Copiar sólo los archivos necesarios para instalar dependencias
 COPY package*.json ./
-
-# Instalar dependencias
+# Instalar dependencias indicadas en package.json
 RUN npm install
 
-# Copiar el resto de los archivos
+# Copiar todos los archivos del contexto (definido en el docker-compose) al workdir del contenedor
 COPY . .
 
-# Exponer el puerto de Vite
+# Exponer el puerto
 EXPOSE 5173
 
-# Iniciar el servidor de desarrollo
+# Comando de arranque. Es sobreescribido por el comando definido en docker-compose
 CMD ["npm", "run", "dev"]

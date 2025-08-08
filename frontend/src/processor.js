@@ -1,8 +1,7 @@
 import callbacks_functions from './callbacks.js';
 import { createBotMessageContainer } from './messages.js';
 import { renderize_html, cleanTemporalSpan } from './renderer.js';
-import { scrollToBottom} from './utils.js';
-//import { cleanTextForAvatar} from './avatarRender.js';
+import { scrollToBottom, cleanMarkdownForSpeech} from './utils.js';
 import { speakAvatar } from "./avatar.js";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -85,8 +84,7 @@ export async function processMessage(messageData) {
     }
 
     if(completeAnswer){
-      //let cleanCompleteAnswer = cleanTextForAvatar(completeAnswer)
-      await speakAvatar("Hola a todos!. Bienvenidos al mundo inmobiliario. Soy tu asistente de Inteligencia Artificial")
+      await speakAvatar(cleanMarkdownForSpeech(completeAnswer)) // Ejecutamos el avatar
     }
 
     if (tempImageUrls.length > 0) {

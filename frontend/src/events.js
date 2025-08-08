@@ -5,7 +5,7 @@ export function setupUIEvents() {
 
     // Quitar mute del avatar si aún está activo
     function enableAvatarAudio() {
-        const video = document.getElementById("avatarVideo");
+        const video = document.getElementById("avatar-container");
         if (video && video.muted) {
             video.muted = false;
             console.log("Audio del avatar activado por interacción.");

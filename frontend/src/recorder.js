@@ -31,57 +31,57 @@ let stopTimeout = null;
 const micButton = document.getElementById("mic-button");
 
 export async function recordUserAudio(micButton) {
-    if (mediaRecorder && mediaRecorder.state === "recording") {
-      stopRecording();
-      return;
-    }
-  
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert("Tu navegador no soporta la grabación de audio.");
-      return;
-    }
-  
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  
-      audioChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
-  
-      mediaRecorder.ondataavailable = event => {
-        if (event.data.size > 0) {
-          audioChunks.push(event.data);
-        }
-      };
-  
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-  
-        createUserMessageContainer("Audio enviado");
-        sendAudioToBackend(audioBlob);
-  
-        micButton.classList.remove("recording");
-        stream.getTracks().forEach(track => track.stop());
-      };
-  
-      mediaRecorder.start();
-      micButton.classList.add("recording");
-      stopTimeout = setTimeout(stopRecording, 30000);
-  
-    } catch (err) {
-      console.error("Error al acceder al micrófono:", err);
-      alert("No se pudo acceder al micrófono.");
-    }
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    stopRecording();
+    return;
   }
-  
-  function stopRecording() {
-    if (mediaRecorder && mediaRecorder.state === "recording") {
-      mediaRecorder.stop();
-      clearTimeout(stopTimeout);
-    }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert("Tu navegador no soporta la grabación de audio.");
+    return;
   }
-  
-  async function sendAudioToBackend(audioBlob) {
-    const formData = new FormData();
-    formData.append('audio', audioBlob, 'grabacion.webm');
-    await processMessage(formData);
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+
+    mediaRecorder.ondataavailable = event => {
+      if (event.data.size > 0) {
+        audioChunks.push(event.data);
+      }
+    };
+
+    mediaRecorder.onstop = () => {
+      const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+
+      createUserMessageContainer("Audio enviado");
+      sendAudioToBackend(audioBlob);
+
+      micButton.classList.remove("recording");
+      stream.getTracks().forEach(track => track.stop());
+    };
+
+    mediaRecorder.start();
+    micButton.classList.add("recording");
+    stopTimeout = setTimeout(stopRecording, 30000);
+
+  } catch (err) {
+    console.error("Error al acceder al micrófono:", err);
+    alert("No se pudo acceder al micrófono.");
   }
+}
+  
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+    clearTimeout(stopTimeout);
+  }
+}
+  
+async function sendAudioToBackend(audioBlob) {
+  const formData = new FormData();
+  formData.append('audio', audioBlob, 'grabacion.webm');
+  await processMessage(formData);
+}
